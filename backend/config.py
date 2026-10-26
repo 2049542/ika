@@ -1,39 +1,79 @@
 """
 Rutas y constantes de IKA.
 
-Todo se resuelve relativo a la raíz de la app (la carpeta que contiene
-iniciar.bat), así funciona igual desde el disco o desde una USB.
-La variable de entorno IKA_RAIZ permite apuntar a otra carpeta (pruebas).
+Tres modos:
+  - instalado: el .exe instalado con IKA-Instalador. La base de datos y los
+    backups viven en %LOCALAPPDATA%\\IKA y los PDF en Documentos\\IKA, así
+    la carpeta del programa puede reemplazarse al actualizar sin tocar datos.
+  - portable: el .exe con un archivo `portable.txt` al lado (USB). Todo se
+    guarda junto al programa.
+  - desarrollo: corriendo con Python; todo se guarda en la carpeta del repo.
+La variable IKA_RAIZ fuerza una carpeta para todo (pruebas).
 """
 import os
 import sys
 from pathlib import Path
 
+CONGELADO = getattr(sys, "frozen", False)
+EXE_DIR = Path(sys.executable).resolve().parent if CONGELADO else None
 
-def _raiz() -> Path:
+
+def _documentos() -> Path:
+    """Carpeta Documentos real del usuario (respeta la redirección de OneDrive)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class GUID(ctypes.Structure):
+                _fields_ = [("d1", wintypes.DWORD), ("d2", wintypes.WORD), ("d3", wintypes.WORD), ("d4", ctypes.c_ubyte * 8)]
+
+            # FOLDERID_Documents {FDD39AD0-238F-46AF-ADB4-6C85480369C7}
+            fid = GUID(0xFDD39AD0, 0x238F, 0x46AF, (ctypes.c_ubyte * 8)(0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7))
+            ruta = ctypes.c_wchar_p()
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(fid), 0, None, ctypes.byref(ruta)) == 0:
+                valor = ruta.value
+                ctypes.windll.ole32.CoTaskMemFree(ruta)
+                return Path(valor)
+        except Exception:
+            pass
+    return Path.home() / "Documents"
+
+
+def _modo() -> str:
     if os.environ.get("IKA_RAIZ"):
-        return Path(os.environ["IKA_RAIZ"]).resolve()
-    if getattr(sys, "frozen", False):
-        # <raiz>/app/IKA.exe
-        return Path(sys.executable).resolve().parent.parent
-    return Path(__file__).resolve().parent.parent
+        return "prueba"
+    if not CONGELADO:
+        return "desarrollo"
+    if (EXE_DIR / "portable.txt").exists() or (EXE_DIR.parent / "portable.txt").exists():
+        return "portable"
+    return "instalado"
 
 
-def _recursos() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    return Path(__file__).resolve().parent.parent
+MODO = _modo()
 
+if MODO == "prueba":
+    RAIZ = Path(os.environ["IKA_RAIZ"]).resolve()
+    DOCS_DIR = RAIZ / "documentos"
+elif MODO == "desarrollo":
+    RAIZ = Path(__file__).resolve().parent.parent
+    DOCS_DIR = RAIZ / "documentos"
+elif MODO == "portable":
+    RAIZ = EXE_DIR.parent if (EXE_DIR.parent / "portable.txt").exists() else EXE_DIR
+    DOCS_DIR = RAIZ / "documentos"
+else:
+    RAIZ = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "IKA"
+    DOCS_DIR = _documentos() / "IKA"
 
-RAIZ = _raiz()
-RECURSOS = _recursos()
+# Recursos empaquetados (frontend, schema) — dentro del .exe o en el repo.
+RECURSOS = Path(getattr(sys, "_MEIPASS", EXE_DIR)) if CONGELADO else Path(__file__).resolve().parent.parent
 
 DATA_DIR = RAIZ / "data"
 BACKUPS_DIR = RAIZ / "backups"
-DOCS_DIR = RAIZ / "documentos"
-
 DB_PATH = DATA_DIR / "ika.db"
-SCHEMA_PATH = RECURSOS / "backend" / "schema.sql" if not getattr(sys, "frozen", False) else RECURSOS / "schema.sql"
+LOCK_PATH = DATA_DIR / "ika.lock"
+LOG_PATH = DATA_DIR / "ika.log"
+SCHEMA_PATH = RECURSOS / ("schema.sql" if CONGELADO else "backend/schema.sql")
 FRONTEND_DIR = RECURSOS / "frontend"
 LOGO_DEFAULT = FRONTEND_DIR / "img" / "logo-mr.png"
 

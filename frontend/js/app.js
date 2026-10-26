@@ -64,6 +64,12 @@ export async function contadores() {
 
 export const ir = (hash) => { location.hash = hash; };
 
+// Señal de vida: si IKA se abrió en un navegador normal (sin Edge), el
+// servidor se apaga solo unos minutos después de cerrar la pestaña.
+const latido = () => fetch("/api/latido", { method: "POST" }).catch(() => {});
+latido();
+setInterval(latido, 20000);
+
 window.addEventListener("hashchange", navegar);
 window.addEventListener("unhandledrejection", (e) => falla(e.reason));
 navegar();

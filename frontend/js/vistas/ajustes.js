@@ -4,7 +4,7 @@ const campo = (a, clave, etiqueta, extra = "") =>
   `<label class="campo ${extra}">${etiqueta}<input class="input" name="${clave}" value="${esc(a[clave])}"></label>`;
 
 export async function render(el) {
-  const a = await api("/ajustes");
+  const [a, info] = await Promise.all([api("/ajustes"), api("/ika")]);
   el.innerHTML = `
     <div class="page" style="max-width:860px">
       <div class="head"><div class="grow"><h1>Ajustes</h1><p>Datos que aparecen en los PDF y valores por defecto de cada cotización nueva.</p></div></div>
@@ -52,6 +52,16 @@ export async function render(el) {
         </section>
         <div><button class="btn primario" type="submit">Guardar ajustes</button></div>
       </form>
+
+      <section class="card" style="margin-top:22px">
+        <header><h2>Dónde se guardan tus datos</h2></header>
+        <div class="cuerpo" style="display:grid;gap:12px">
+          <div><div class="small muted">PDF exportados</div><div style="color:var(--ink);word-break:break-all">${esc(info.documentos)}</div></div>
+          <div><div class="small muted">Base de datos y respaldos automáticos (cada 15 min y al cerrar)</div><div style="color:var(--ink);word-break:break-all">${esc(info.datos)}</div></div>
+          <p class="small muted" style="margin:0">Para pasar todo a otra laptop: instala IKA ahí, ciérrala y copia estas dos carpetas al mismo lugar.</p>
+          <div><button type="button" class="btn" id="abrir-docs">Abrir carpeta de PDF</button></div>
+        </div>
+      </section>
     </div>`;
 
   el.querySelector("#f").addEventListener("submit", async (e) => {
@@ -72,6 +82,7 @@ export async function render(el) {
       render(el);
     } catch (err) { falla(err); }
   });
+  el.querySelector("#abrir-docs").onclick = () => api("/documentos/abrir-carpeta", { method: "POST", body: {} }).catch(falla);
   el.querySelector("#quitar-logo")?.addEventListener("click", async () => {
     await api("/logo", { method: "DELETE" });
     refrescarLogo();
