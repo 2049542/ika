@@ -1,0 +1,11 @@
+# Datos del negocio: viven en esta carpeta, no en el repo
+/data/
+/backups/
+/documentos/
+
+# Entorno y empaquetado
+/backend/venv/
+/build/
+/app/
+__pycache__/
+*.pyc
